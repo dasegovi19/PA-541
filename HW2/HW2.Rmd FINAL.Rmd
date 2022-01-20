@@ -1,0 +1,445 @@
+David Segovia 
+Assignment #2
+PA 541: Adv. Data Analysis
+
+library(tidyverse)
+library(readr)
+library(haven)
+library(dplyr)
+
+
+```{r}
+setwd("~/Downloads/PA 541 Adv Data Analysis I/HW 2")
+
+```
+
+
+
+### Part ONE
+
+```{r}
+
+car <- read_csv("car_data.csv")
+```
+
+```{r}
+car
+
+
+```
+
+
+
+
+### Question 1
+
+
+a. What is the average selling price for automatic versus manual cars? (2 pts)
+
+Answer: The average selling price for Automatic cars is $1,408,154 and $400,066.7 for manual cars
+```{r}
+
+car %>% 
+  group_by(transmission) %>%
+  summarize(averageprice= mean(selling_price))
+
+
+summary(car$selling_price) #mean is 504,127 across all transmission types
+
+
+#manual: $400,066.7	
+#automatic: $1,408,154
+
+
+```
+
+
+
+b. Of the automatic cars, which model was sold at the highest price? (2pts)
+
+Answer: The Audi RS7 2015-2019 Sportback Performance was sold at the highest price at the value of $8,900,000.
+
+```{r}
+
+carautomatic = car %>% 
+  filter( transmission == "Automatic")
+ 
+summary(carautomatic$selling_price)
+
+
+
+#Max price: 8,900,000 
+
+
+view(carautomatic)
+
+#Model:Audi RS7 2015-2019 Sportback Performance
+
+```
+
+
+
+c. Plot the average selling price for each type of transmission. (3 pts)
+
+```{r}
+
+car_transmission = car %>% 
+  group_by(transmission) %>%
+  summarize(averageprice= mean(selling_price))
+
+car_transmission
+
+# Barplot 
+ggplot(data = car_transmission,
+mapping = aes(x = transmission,  
+y= averageprice)) + 
+geom_col() + 
+  labs( x= "Transmission Type", 
+        y= "Average Price", 
+        title = "Average Price by Transmission Type", 
+        fill = "Category")
+```
+
+
+d. Plot the relationship between selling price and year for the automatic and manual cars on the same plot. (3 pts)
+
+
+```{r}
+
+carselling = car%>% 
+  group_by(year, transmission) %>%
+  summarize(totalsellingprice= sum(selling_price, na.rm = TRUE)) %>%
+  arrange(year)
+carselling
+
+
+ggplot(data = carselling,
+       mapping = aes(x = year, y = totalsellingprice,
+                     color = factor(transmission) ) ) + 
+  geom_point()
+```
+
+Question 2: Estimate a model with selling price as the dependent variable and kilometers driven and transmission as the independent variables. (2pts) Interpret the coefficients on all independent variables and the intercept. (6 pts)
+
+
+```{r}
+mod1 = lm (selling_price ~ km_driven + transmission, data=car)
+summary(mod1) 
+
+```
+
+Answer: 
+
+intercept: The estimated selling price for Automatic cars with 0 kilometers driven. In this case, the estimated selling price is $1,489,000.
+
+km_driven: Holding transmission constant, for every one thousand kilometers driven, the average selling price goes down by -$1.618 Indian Rupees. The effect is significant at the 0.001 level.
+
+transmissionManual: holding km driven constant, compared to Automatic cars, the average selling price for manual cars is -978,300 lower than automatic cars. The effect is significant at the 0.001 level.
+
+
+
+
+Question 3:
+
+Now add year to the model. What happens to the coefficient on kilometers driven? Why?
+```{r}
+
+mod2 = lm (selling_price ~ km_driven + transmission + year, data=car)
+summary(mod2) 
+
+cor.test(car$km_driven, car$year)
+# -0.42 ***
+
+```
+
+The km_driven coefficient is now 0.1543, but before it was negative. This means that holding transmission and year constant, for every additional km driven,the selling price goes up by 0.1545. I think that there is omitted variable bias in the first equation and we need to hold year constant. Since year has a positive coefficient on selling price (4.803e+04 ***) and the correlation between year and kilometers driven is negative (-0.42 ***), this means that there is negative bias. 
+
+So in the original model, the coefficient of km was -1.618. The direction is negative due to the omitted variable bias due to the effect of year and the strong correlation between year and km_driven. But once we control year, which is a significant predictor variable, we can now estimate the true coefficient of km, which is 0.1545. The effect of km_driven is no longer significant.
+
+
+
+Question 4: 
+Now add the categorical variable owner to the previous model (the one that included km_driven, transmission, and year). Make “first owner” the reference group for the owner variable (hint: you would need to tranform the variable “owner” into a factor before determining the reference group). (2 pts) Interpret the coefficients of owner. (4 pts)
+
+
+This approach will give numerical values to the "owner" category and run the regression
+
+```{r}
+
+car2 <- car
+car2
+
+car2$owner <- recode_factor(car2$owner, `First Owner` = "1", `Second Owner` = "2", `Third Owner` = "3", 'Fourth & Above Owner' = "4", 'Test Drive Car' = "5")
+
+
+mod4 = lm (selling_price ~ km_driven + transmission + year + owner, data=car2)
+summary(mod4)
+
+
+```
+Answer:
+
+ownerFourth & Above Owner: compared to cars with 1 previous owner, cars with 4 and more owners have a -24,040 less selling price. This is not stat. significant.
+
+ownerSecond Owner: compared to cars with 1 previous owner, cars with 2 previous owners have a -52,820  less selling price. This is stat. significant at the 0.01 level.
+
+ownerTest Drive Car: compared to cars with 1 previous owner, test drive cars have a 195,500 more selling price. This is not stat significant, only at the 10% level. 
+
+ownerThird Owner: compared to cars with 1 previous owner, cars with 3 previous owners have a -57,750 less selling price. This is stat significant at 95%, the 0.05 level. 
+
+
+
+
+
+Question 5: 
+What would be the predicted selling price of an automatic 2012 car with 100,000 kilometers and whose owner category is first owner?
+
+
+Answer: The predicted selling price is 1,301,930.
+
+```{r}
+-90450000 + (0.2485*100000) + (45590 * 2012)
+```
+
+
+
+
+
+
+
+```{r}
+
+mod3 = lm (selling_price ~ km_driven + transmission + year + owner, data=car)
+summary(mod3)
+
+
+pred.price = as.matrix(c(1,100000,0,2012,0,0,0,0))
+
+#(Intercept): 1               
+#km_driven: 100,000                     
+#transmissionManual: 0         
+#year: 2012                      
+#ownerFourth & Above Owner: 0   
+#ownerSecond Owner: 0        
+#ownerTest Drive Car: 0       
+#ownerThird Owner: 0        
+  
+
+price_automatic = crossprod(pred.price, coef(mod3))
+price_automatic
+#$1,300,698
+```
+
+
+
+
+
+Question 6:
+The model above implicitly assumes the effect of year is the same regardless of the kilometers driven. Test whether this assumption is true and briefly discuss your results (i.e., tell me whether the assumption is true or not).
+
+We are looking at the coefficient of year and whether km_driven affects this coefficient. so km-driven* year. Km-driven affects year on selling price. 
+
+
+
+
+Answer: 
+No, this assumption is not true.
+
+The actual answer is to add an interaction effect between kilometers and year. 
+
+```{r}
+
+mod7 <- lm(selling_price ~ km_driven*year + transmission + owner, data = car)
+summary(mod7)
+
+```
+The results show a significant interaction between year and kilometers driven. Thus, the implicit assumption that the effect of year is the same regardless of the kilometers driven does not hold. It is clear that kilometers driven moderate the effect of year on the selling price. Year has a higher impact on selling price for cars with less kilometers. This is because the year coefficient shows that for every additional year, selling price increases by 51,540 for cars with 0 kilometers driven and this is statistically significant.
+
+
+
+
+
+
+#### PART TWO
+
+
+
+
+```{r}
+insurance <- read_csv("insurance.csv")
+
+```
+
+Question 7:
+
+Write out a model (in notation similar to that which we use in class or the Wooldridge text; in other words write out the regression model) that predicts the charges based on age, sex, bmi and smoker. You can use the Microsoft word equation editor or simply enter the model using regular text in word. (2 pts) Given the model and how the variables are defined in the dataset, what is the base group? (2 pts) Write out the condition expectation for a female smoker. (2 pts) Write out the conditional expectation for a male nonsmoker. (2 pts)
+
+
+
+
+Model: y= a0 + a1D1i + a2D2i + B1x1 + B2x2 + Ei
+
+y= charges
+a0= intercept, the estimated charges for female non-smokers who are 0 years old and 0 BMI.
+x1= age
+x2= BMI 
+D1i= sex (0= female, 1=male)
+D2i= Smoker (0= no smoker, 1= yes smoker)
+
+
+-Base group for a1D1i is female because we will recode 'sex' to be 0 for female, 1 for male. The base group for a2D2i is non-smoker because 0= no.
+
+
+
+
+-Condition expectation for a female smoker:
+
+E(charges|Age,Gender=Female, bmi, smoker=yes)
+y= a0 + a1D1i(0) + a2D2i(1) + B1x1 + B2x2 +, so
+y= a0 + B1x1 + B2x2 + a2D2i
+
+The condition expectation for a female smoker is the intercept plus the age ,BMI, and smoker coefficients.  We don't add the sex coefficient because 0=female.
+
+
+
+
+-Condition expectation for a male nonsmoker:
+E(charges| Age, Gender=Male, bmi, Smoker=no)
+
+y= a0 + a1D1i(1) + a2D2i(0) + B1x1 + B2x2 
+y= a0 + B1x1 + B2x2 + a1D1i 
+
+The condition expectation for a male nonsmoker is the intercept plus the age ,BMI, and sex coefficients. We don't add the smoking coefficient because 0= nonsmoker. 
+
+
+
+
+
+
+Question 8:
+
+Run the model discussed in question 7. (2pts) Interpret the coefficients on sex and smoker (4 pts). Look at standard errors on coefficients for sex and smoker. Why are they different? (2 pts) [Hint: look at the formula for how we calculate the variance of our coefficient estimates]
+
+
+
+
+```{r}
+# First we will recode so that female= 0, male=1 and no smoker= 0, yes smoker=1.
+insurance2 <- insurance
+insurance2
+
+insurance2$sex <- recode_factor(insurance2$sex, `female` = "0", `male` = "1")
+insurance2$smoker <- recode_factor(insurance2$smoker, `no` = "0", `yes` = "1")
+
+```
+
+Now let's run the model.
+
+```{r}
+
+mod5 = lm (charges ~ age + sex + bmi + smoker, data=insurance2)
+summary(mod5)
+
+```
+Sex coefficient: Holding age, bmi, and whether a person smokes constant, men have an estimated -109.04 less medical charges compared to women. In other words, women have higher medical charges. This is not statistically significant.
+
+Smoker coefficient: Holding age, bmi, and a person's sex constant, people who smoke have an estimated 23,833 higher medical charges compared to non-smokers. 
+This is statistically significant (p<.05 ***)
+
+The standard error for sex coefficient is 334.66 while the standard error for smoker coefficient is 414.19. The most important part of the equation of the multivariate case is the (1-R^2), and in the case of the smoker coefficient, this is how well sex predicts whether someone were to smoke or not. So if sex does predict smoker, then the denominator will be low but the variance would be high. There is a lot of noise in this model, and this is partly due to multicollinearity( that is, how much the effect of sex is explained by smoking itself). Men generally are more likely to smoke than women, so both variables are related. In short, the variances are noisy due to overlap between sex and smoker coefficient.Note that we obtain the t-value by dividing the estimated coefficient by the standard error. We are looking to get a standard error as small as possible compared to the coefficient. For the sex coefficient, the standard error of 334.66 is way too big for the coefficient, so the precision of our estimate is small. However, the standard error for smoker is really small compared to the smoker coefficient, so the t-value is big enough for us to declare statistical significance. The fact that the t-value is 57.544 for smoker gives us confidence that the coefficient is significantly different than 0 (57 standard errors away from 0) whereas the t-value for sex coefficient is really close to 0(-0.326)
+
+The real answer here lies in the variance between the Independent variables (Sex and Smoker). This is because sample size and fit of the model is the same. The variance for females is 0.25 while the variance for smoker is 0.16. This means that there is more variance in females, hence the smaller Standard Error while there is less variance in smoker, giving us a bigger Standard Error.
+
+
+```{r}
+#female variance
+insurance$sex2 <- ifelse(insurance$sex == "female", 0, 1) 
+var(insurance$sex2)
+# 0.25
+
+# non-smoker variance
+insurance$smoker2 <- ifelse(insurance$smoker == "no", 0, 1)
+var(insurance$smoker2)
+#0.1629689
+
+
+
+
+
+
+  
+
+
+
+```
+
+
+
+
+
+
+
+
+Question 9: 
+
+The model above implicitly assumes the effect of bmi is the same for both smokers and nonsmokers. Test whether this assumption is true and briefly discuss your results (i.e., tell me whether the assumption is true or not). (4 pts) Interpret the simple main effect of bmi and smoker as well as the interaction. (4 pts) What are the estimated charges for a 38 years old non smoker man with 25 bmi? (2 pts) What are the estimated charges for a 25 years old smoker woman with 30 bmi? (2 pts)
+
+
+```{r}
+mod6 = lm (charges ~ age + sex + bmi + smoker + bmi*smoker, data=insurance2)
+summary(mod6)
+```
+
+The assumption is not true! The interaction coefficient BMI:Smoker is significant! 
+
+Bmi: Simple main effect. For non-smokers, for every +1 increase in BMI, medical charges increase by 7.69. This is the conditional effect when smoker=0 (non-smokers) and is not statistically significant.
+
+Smoker: Smokers with 0 bmi have -20193 less medical charges compared to non-smokers with 0 bmi. This is a conditional effect of smoking when BMI=0 and is statistically significant. (p<.05) ***.
+
+Bmi*Smoker: This is the difference in BMI between smokers and non-smokers. For smokers, the effect of BMI is 1435 more for each additional unit of bmi compared to non-smokers. Remember that for a +1 increase in BMI, medical charges increase by 7.69 for nonsmokers. So for smokers, for a +1 increase in BMI, medical chargers increase by (1435+7.69)= 1442.69 for smokers. The difference in the effect of one additional unit of BMI on charges for smokers and non-smokers is 1442.69- 7.69= 1435.
+
+
+
+
+
+The estimated charges for a 38 year old non smoker man with 25 bmi: $7,776.793
+
+```{r}
+
+mod6 = lm (charges ~ age + sex + bmi + smoker + bmi*smoker, data=insurance2)
+
+#38 year old non smoker man
+obs.x = c(1,38,1,25,0,0)
+estimated.chargesA = crossprod(obs.x, mod6$coefficients)
+estimated.chargesA
+```
+
+
+The estimated charges for a 25 year old smoker woman with 30 bmi: $27,702.38
+```{r}
+#25 year old smoker woman
+mod6 = lm (charges ~ age + sex + bmi + smoker + bmi*smoker, data=insurance2)
+obs.y = c(1,25,0,30,1,30)
+estimated.chargesB = crossprod(obs.y, mod6$coefficients)
+estimated.chargesB
+```
+
+
+
+Question 10: Do you trust the coefficients in the model above? In other words, do you consider these to be reasonable causal estimates of the effects of the different variables? Why or why not?
+
+
+
+### omitted variable bias
+# No, we cannot trust this. We need to do research. This can be unbiased, we found significant effects. This doesn't mean the model doesn't suffer from omitted variable bias. We need to figure out if there are variables that are correlated with IV's and DV's. There are other variables. We didn't control for the type of sickness( and seriousness), which can be correlated with smoking and charges.
+
+
+We cannot make causal inferences based on what makes sense to us. We had discussed in class the example of soldiers from rural versus urban areas. In order to make causal inferences, we need to be sure about the estimation of the coefficients. Here the model suffers form omitted variable bias. There are variables that are correlated with an independent and the dependent variable. For example, I assume that the seriousness of an illness is correlated both with bmi and the charges. So the model is biased
+
+
+
+
+
+
+
+
