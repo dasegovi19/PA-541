@@ -1,0 +1,546 @@
+---
+title: "R markdown"
+author: "David Segovia"
+date: "4/2/2021"
+output:
+  html_document:
+    toc: true   
+    toc_depth: 3
+    toc_float: yes
+    number_sections: true
+    theme: cerulean
+    highlight: pygments 
+---
+
+
+```{r setup}
+knitr::opts_chunk$set(message = FALSE)
+
+```
+
+```{r}
+ setwd("~/Downloads/PA 541 Adv Data Analysis I/HW 3")
+
+library(readr)
+library(tidyverse)
+library(lmtest)
+library(car)
+cavax <- read_csv("cavax.csv")
+concealed_carry <- read_csv("concealed_carry.csv")
+
+```
+
+1.
+ a. In how many schools is the percentage of students exempt for medical reasons (med_exempt) greater than the percentage exempt for religious reasons (rel_exempt)? [2 pts] Of this set of schools, what percent are public schools? [2 pts]
+
+```{r}
+dim(cavax) #7032 rows, 11 columns. 7032 schools
+
+
+cavax_medical = cavax %>%
+  mutate("greater" = if_else(med_exempt > rel_exempt, "high", "low")
+         ) 
+
+table(cavax_medical$greater) # 518 schools is med_exempt > rel_exempt
+
+# filter for these 518 schools.
+cavax_medical2 = cavax_medical %>%
+  filter(greater == "high")
+
+
+table(cavax_medical2$type)
+ #70 private, 448 public.  So 448/518 = 86.4% of these schools are public
+
+
+
+
+```
+
+
+Answer: In 518 schools, 86.4%
+
+
+
+
+ b. Which county, when averaging across all the schools in that county, has the highest average percentage of exempt students (exempt)? Note, we are using the variable exempt here. [2 pts]
+
+
+```{r}
+
+
+
+table(cavax$county)
+
+
+cavax_county = 
+  cavax %>%
+  group_by(county) %>%
+  summarize("meanexempt" = mean(exempt)) %>%
+  arrange(desc(meanexempt))
+
+cavax_county
+
+
+```
+Answer: Nevada has the highest average of exempt students. 
+
+
+
+ c. Create a bar chart that shows for private and public schools (type) the percent of students exempt from providing vaccination records (exempt). [2 pts] ( are we looking at average here???)
+
+
+```{r}
+
+cavax_type2 = 
+  cavax %>%
+  group_by(type) %>%
+  summarize("sumexempt" = sum(exempt))
+
+ggplot(data=cavax_type2, aes(x=type, y=sumexempt)) +
+  geom_bar(stat="identity") + labs(title = "Total Percent of Students Exempt From Providing Vaccination Records and School Types",
+      x = "Type of School",
+      y = "Total Percent of Students Exempt")
+```
+
+
+
+ 2. Estimate a model predicting exempt (exempt) by district type (type) and enrollment (enrollment). [2 pts] Treat exempt as a continuous variable (and thus you can use standard OLS). Interpret the intercept and the coefficients. [4 pts] What is the predicted exempt percentage for a public school with 100 students in kindergarten? [2 pts] What is the predicted exempt percentage for a private school with 80 students in kindergarten? [2pts]
+
+
+
+```{r}
+# We are predicting the percent of students who are exempt from providing vaccination records by type of school (public vs private) and total kindergarten enrollment
+
+reg1= lm(exempt ~ type + enrollment, data= cavax)
+summary(reg1)
+
+
+
+```
+Intercept: This is the estimated percentage of students who are exempt from vaccination for students who are in private schools and have 0 total enrollment. The estimated percentage is 6.28%. This is statistically significant at the p<.001 level. ***
+
+typePUBLIC: This is comparing the percentage of students who are exempt from vaccination for students who are in public compared to those in private while holding total enrollment constant. Students who are in public schools have -0.86% less percentage of students who are exempt from vaccination compared to students in private schools. In other words, students who are in private schools have 0.86% more percentage of students exempt from vaccination. This is significant at the p<.01 level. **
+
+enrollment: this is the effect of enrollment on the estimated percentage of students who are exempt from vaccination while holding type of school constant. As total enrollment goes up by 1 student, the percentage of students exempt from vaccination goes down by -0.02%. This is significant at the p<.001 level. ***
+
+
+
+What is the predicted exempt percentage for a public school with 100 students in kindergarten? [2 pts]
+
+```{r}
+#reg1: lm(formula = exempt ~ type(public) + enrollment, data = cavax)
+
+#1st way
+pred.exempt1 = as.matrix(c(1,1,100))
+
+exempt = crossprod(pred.exempt1, coef(reg1))
+exempt     
+
+# 2.46%
+
+
+###2nd way
+
+6.288602 + (-0.860822*1) + (-0.029606*100)
+#2.46%
+
+
+```
+Answer: 2.46%
+
+
+What is the predicted exempt percentage for a private school with 80 students in kindergarten? [2pts]
+
+```{r}
+#reg1: lm(formula = exempt ~ type(public) + enrollment, data = cavax)
+pred.exempt2 = as.matrix(c(1,0,80))
+#1st way
+exempt2 = crossprod(pred.exempt2, coef(reg1))
+exempt2                          
+# 3.92%                         
+     
+
+###2nd way 
+6.288602 + (-0.860822*0) + (-0.029606*80)                                           
+#3.92%
+
+```
+
+Answer: 3.92%
+
+
+
+ 3. Test whether the assumption of homoskedasticy has been met. [2 pts] Discuss results. [2 pts] Calculate the VIF for each variable. [2 pts] Should we be concerned with multicollinearity. [2 pts] (Note, the vif() command is in the ‘car’ package. You can also calculate the VIF yourself as we did in class) 
+
+
+```{r}
+# test for heteroskedasticity, the 5th assumption of linear regression model. The assumption here is that the variance of the error term is the same across all combinations of values of the explanatory variable. We don't want IV's, in this case, school type and total number of enrolled kids to predict the error term. .
+
+# if heteroskedasticity is present, this means that the variance of the error term(the unexplained) is not the same and changes based on the value of the IV's. 
+
+bptest(reg1)
+#This is statistically significant so there is heteroskedasticity. We should use robust standard errors
+
+```
+
+After running the Breusch-Pagan test, the p-value is significant. This means that the variance of the error term is not the same and changes based on the value of the Independent Variables ( school type and enrollment). 
+
+
+vif to detect multicollinearity
+
+
+
+```{r}
+vif(reg1)
+```
+
+Looks good. There doesn't seem to be multicollinearity between school type and enrollment. 
+
+
+
+
+ 4. Recenter the variable enrollment at its mean. [2 pts] Create an interaction between type (type) and student enrollment (enrollment) recentered and rerun the model predicting exempt (exempt). [2 pts] Assume that type moderates the effect of enrollment in your interpretation of the interaction. (i) Interpret the results on each coefficient. (ii) Create a plot to visualize the interaction. [4 pts]
+
+
+```{r}
+
+summary(cavax$enrollment)
+mean(cavax$enrollment) # mean is 75.65
+
+cavax$enrollment2 = scale(cavax$enrollment, center = TRUE, scale = FALSE) # recenter at the mean. Mean is now 0
+cavax$enrollment2 <- as.numeric(cavax$enrollment2)
+
+reg2 = lm(exempt ~ type + enrollment2 + type*enrollment2, data= cavax)
+summary(reg2)
+
+
+```
+
+Intercept: the predicted percentage of students exempt from providing vaccination records in private schools with 76 students ( the mean enrollment) . The estimated percent is 3.83%. This is significant at the P<.001 level ***.
+
+Type Public: Conditional effect of type of school when enrollment is at the mean. Public vs private exempt at the mean enrollment. At the mean enrollment of 76 students, public schools have -0.65% less percentage of students exempt from providing vaccination records compared to private schools. This is not statistically significant. 
+
+Enrollment2: Conditional effect of enrollment for private schools. For every additional kindergartener in private schools starting from the mean enrollment of 76 students, the percentage of students exempt from providing vaccination records in private schools goes down by -0.034017%. This is stat. significant at the P.001 level **. 
+
+typepublic*enrollment2: slope of enrollment moderated by the type of school. Whether the school is public or private moderates the effect of enrollment on the percentage of students exempt from providing vaccination records. Here, this is the difference in percentage of students exempt from providing vaccination records between public and private schools. For public schools, the effect of a +1 enrollment starting from the mean enrollment of 76 students is 0.004599% more on exempt percentage compared to private schools.
+Since +1 enrollment decreases slope by only -0.034017% for private schools, a +1 enrollment decreases slope of public schools by (0.004599 - 0.034017) = -0.029418%. However, this is not statistically significant. 
+
+
+Graph of interaction
+
+
+```{r}
+#create plot to visualize interaction
+summary(cavax$enrollment2)
+
+
+DATA1= expand.grid(type = c('PRIVATE','PUBLIC'),
+                        enrollment2 = c(0:480) )
+                   
+
+
+DATA1$preds = predict(reg2, new=DATA1, type="response")
+
+
+ggplot(DATA1, aes(x=enrollment2, y=preds, color=factor(type))) + 
+  geom_point(size = 3) 
+
+
+
+```
+
+
+
+Question 5: Let’s log transform (using the natural log) the variable enrollment and call the new variable log_enroll. [2pts]  Estimate a model predicting exempt (exempt) by district type (type) and log of enrollment (log_enrollment). [ 2pts] Interpret the coefficient on the log of enrollment. [2 pts] Does it make more sense to use enrollment or the log of enrollment as the predictor variable? Why? [4 pts] 
+
+
+
+
+```{r}
+
+cavax = 
+  cavax %>%
+  mutate(lenrollment = log(enrollment))
+
+
+
+logm1 = lm(exempt ~ type + lenrollment, data= cavax )
+summary(logm1)
+
+
+
+```
+
+A 1 % increase in total number of students enrolled decreases percentage of students exempt from vaccination by -2.73/100= -0.027338 percentage points while holding type of school constant. This is significant at the p<.001 level ***. Yes, this makes sense because total enrollment across all schools may be different, so a +1 increase in enrollment in a small school is different than a +1 increase in enrollment in a big school. Instead, we want to compare the effect of a 1% increase in enrollment in percentage of students exempt from vaccination records across all the schools regardless of enrollment size. 
+
+
+-2.73/100
+
+
+
+ Question 6: Create a binary variable to indicate high versus low exempt rates. For schools with exempt percentages equal to or greater than 33 percent, indicate them as “high”, for all other schools indicate them as “low”. [2 pts] Run a logistic regression predicting whether a school is high versus low, in other words, we want our model to predict schools falling into the high category. In your model use the predictors of school type (type) and enrollment (enrollment) (note: do not use log_enroll in this model). [2 pts] 
+
+
+Interpret the coefficients on type and enrollment in terms of both log odds and odds. [ 6 pts] 
+
+
+
+```{r}
+
+cavax = 
+  cavax %>%
+  mutate(exemptrate = case_when( exempt >= 33 ~ 'high',
+                                 exempt < 33 ~ 'low'))
+
+
+cavax = 
+  cavax %>%
+  mutate(exemptrate = ifelse(exemptrate == "high", 1, 0))
+
+
+
+lg3 = glm(exemptrate ~ type + enrollment, family=binomial(link="logit"), data= cavax)
+summary(lg3)
+
+
+
+```
+
+ logged odds interpretation:
+
+typePublic: the logged odds of a public school being a high exempt school is 0.11 greater than private schools while holding total enrollment constant. This is not statistically significant. public schools are 1.12 times greater to be a high exempt school than private schools. 
+
+enrollment: As the number of enrollment goes up by 1 kindergartner, the logged odds of a school being a high exempt school goes down by -0.03. This is statistically significant at the p<.001 level.  as total enrollment goes up by 1 kindergartner, the odds decrease by 3% for every additional kindergartner. 
+
+
+
+
+```{r}
+exp(lg3$coef)
+```
+
+
+
+
+```{r}
+
+(exemptrate ~ type + enrollment)
+
+#first way
+Ex1 = as.matrix(c(1,0,100))
+
+P1= crossprod(Ex1,coef(lg3))
+
+exp(P1)/(1+exp(P1))
+
+#2nd way
+P2= -2.569319 + (-0.031009*100)
+exp(P2)/(1+exp(P2))
+
+
+```
+
+What is the probability of being a high exempt school if the school is private and has 100 students enrolled? [2 pts] 
+
+The probability of a private school being a high exempt school with 100 students enrolled is 0.003%
+
+
+
+
+### Part two:
+
+
+
+QUESTION 7 [10 pts]
+a. Let’s begin by exploring the data. How many years are there in concealed_carry data? How many observations per state? [2 pts]
+
+```{r}
+
+concealed_carry
+
+table(concealed_carry$statename)
+
+
+```
+
+There are 23 years from 1977-1999.
+Excluding state id and year, there are 3 observations per state for 23 years starting from 1977-1999. These 3 observations are violent crime rate per 100k people, murder rate per 100k people, and whether the state had concealed carry that year ( shall=1 means yes, shall=0 means no). 
+
+
+
+
+
+ b. How many states had concealed carry laws (shall) in 1977 and how many had concealed carry laws in 1999? [ 4pts]
+
+
+```{r}
+states1977  =
+  concealed_carry %>%
+  filter(year == "1977", shall == "1")
+
+states1977 
+
+
+  
+states1999  =
+  concealed_carry %>%
+  filter(year == "1999", shall == "1")
+  
+  states1999
+  
+```
+
+Only 4 states had concealed carry in 1977, compared to 29 states in 1999.
+
+
+
+c. Create a plot tracking the violent crime rate (vio) over time for states that have adopted conceal carry laws (shall) and those that have never adopted the law. [4 pts]
+
+Graph 1: 
+```{r}
+
+#x = year
+#y = vio
+#color = vif (1= yes, 0 = no)
+
+
+#let's have 2 groups per year. VIO=1, VIO=0. Let's have the average of all VIO per year for each of these 2 groups.
+
+concealed_carry$year <- as.double(concealed_carry$year)
+
+concealed_carry %>%
+  group_by (shall, year) %>%
+  summarize(meanvio = mean(vio)) %>% 
+  ggplot() + geom_line(mapping =
+aes(x = year, y = meanvio,
+color = as.character(shall)), size = 5,
+alpha = 0.8,
+) + 
+  ylab( "Average Violent crime rate per 100,000 people") + 
+  xlab( "year") + 
+  labs(title = "Differences in VIO between states that have adopted and have not adopted \n conceal carry laws") +
+    scale_color_manual(name= "Shall", 
+                      labels= c("Have not adopted carry law", "Have adopted carry law"),
+                      values = c("antiquewhite3", "cyan1")) 
+
+
+
+ 
+
+```
+States that have not adopted concealed carry laws are more likely  to have higher violent crime rates compared to states that have adoped concealed carry laws. 
+
+
+
+
+```{r}
+concealed_carry %>%
+  group_by (shall, year) %>%
+  summarize(sumvio = sum(vio)) %>% 
+  ggplot() + geom_line(mapping =
+aes(x = year, y = sumvio,
+color = as.character(shall)), size = 5,
+alpha = 0.8,
+) + 
+  ylab( "Total Violent crime rate per 100,000 people  ") + 
+  xlab( "year") + 
+  labs(title = "Differences in VIO between states that have adopted and have not adopted \n conceal carry laws") +
+    scale_color_manual(name= "Shall", 
+                      labels= c("Have not adopted carry law", "Have adopted carry law"),
+                      values = c("antiquewhite3", "cyan1"))
+```
+
+
+
+
+
+QUESTION 8 [10 pts]
+Convert the violent crime rate (vio) into a logged variable (using the natural log), call it log_vio. [2 pts] This will be our dependent variable. 
+
+Run a pooled regression of the data (i.e., standard OLS model as if this was cross-sectionall data) predicting the log of violent crimes (log_vio) as a function of the presence of concealed carry laws (shall) and a set of dummy variables for year. 
+
+[2 pts] Interpret the effect of shall. [2 pts] 
+
+ In general terms, what do the year dummy variables tell us about crime trends? [2 pts] In our current specification of the model, is the effect of shall the same for all years? Why or why not? [2 pts] 
+
+
+
+
+
+pooled cross sectional data without interaction
+
+```{r}
+
+concealed_carry$log.vio = log(concealed_carry$vio)
+
+reg3 = lm(log.vio ~ shall + factor(year), data = concealed_carry)
+summary(reg3)
+
+
+
+
+```
+
+
+Shall coefficient:  Compared to states without a concealed carry law, states with concealed carry law on average had 45% less violent crime while holding year constant. This is stat. significant at the p<.001 level. 
+
+```{r}
+
+100*(exp(-0.59812) - 1)
+
+
+
+
+
+
+     
+```
+
+
+
+Currently, it is the same. This assumes that the effect of whether the state had a concealed carry law or not is the same across all years which is not true. This should significantly alter concealed carry law. So let's run an interaction. 
+
+First, let's test for heteroskedasticity. 
+
+```{r}
+bptest(reg3) # not a problem. Let's use same standard errors.
+
+```
+Let's run an interaction now.
+
+
+```{r}
+
+reg4 = lm(log.vio ~ shall + factor(year)*shall , data = concealed_carry)
+summary(reg4)
+
+```
+
+1) The effect of shall in 1977 is no longer significant even though this was significant without the interaction model. 
+
+2) The effect of conceal carry laws(shall) on violent crime rates declines over time ( because the % change in VIO goes up instead of going down). As more states adopt conceal carry laws, the percentage of violent crime rate goes up instead of going down each year starting from 1986 but this is not statistically significant. This can be  because of other factors, not just the effect of shall. The effect was fairly good from 1978 to 1986 because VIO went down but again, this is not significant. Moreover, Shall and the interaction are not statistically significant. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
